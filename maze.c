@@ -136,7 +136,7 @@ int move_player(Maze *maze, char direction) {
 
     // when player reach the E 
     if (maze->grid[new_y][new_x] == 'E') {
-        return 1; // end - success
+        return 1; // end of maze - success
     }
 
     return 0; 
