@@ -3,7 +3,9 @@
 #include <string.h>
 #include <time.h>
 
-// primary Struct of maze
+#define MAX_SIZE 100
+#define MIN_SIZE 5
+
 typedef struct {
     int height;
     int width;
@@ -14,14 +16,14 @@ typedef struct {
     int exit_y;
 } Maze;
 
-Maze generate_maze(int min_size, int max_size);
+Maze generate_maze();
 void print_maze(const Maze *maze);
 int move_player(Maze *maze, char direction);
 void game_loop(Maze maze);
 
 int main() {
     srand(time(NULL));
-    Maze maze = generate_maze(5, 100);
+    Maze maze = generate_maze();
 
     if (maze.grid == NULL) {
         printf("Failed to generate maze.\n");
@@ -30,7 +32,7 @@ int main() {
 
     game_loop(maze);
 
-    // release storage
+    // Free allocated memory
     for (int i = 0; i < maze.height; i++) {
         free(maze.grid[i]);
     }
@@ -39,61 +41,48 @@ int main() {
     return 0;
 }
 
-Maze generate_maze(int min_size, int max_size) {
+// Generate maze using DFS algorithm
+Maze generate_maze() {
     Maze maze = {0};
+    int dx[] = {0, 1, 0, -1};
+    int dy[] = {-1, 0, 1, 0};
 
-    // Random size
-    maze.height = min_size + rand() % (max_size - min_size + 1);
-    maze.width = min_size + rand() % (max_size - min_size + 1);
+    // Randomize maze dimensions
+    maze.height = MIN_SIZE + rand() % (MAX_SIZE - MIN_SIZE + 1);
+    maze.width = MIN_SIZE + rand() % (MAX_SIZE - MIN_SIZE + 1);
 
-    // Allocate storage
+    // Allocate memory for grid
     maze.grid = (char **)malloc(maze.height * sizeof(char *));
     for (int i = 0; i < maze.height; i++) {
         maze.grid[i] = (char *)malloc(maze.width * sizeof(char));
+        memset(maze.grid[i], '#', maze.width); // Initialize with walls
     }
 
-    // Initialize the maze with walls
-    for (int i = 0; i < maze.height; i++) {
-        for (int j = 0; j < maze.width; j++) {
-            maze.grid[i][j] = '#'; // wall
-        }
-    }
-
-    // Set the player's starting position
+    // Set starting position
     maze.player_x = 1;
     maze.player_y = 1;
     maze.grid[maze.player_y][maze.player_x] = 'S';
 
-    // Set the exit position
-    maze.exit_x = maze.width - 2;
-    maze.exit_y = maze.height - 2;
-    maze.grid[maze.exit_y][maze.exit_x] = 'E';
-
-    // Directions: up, right, down, left
-    int dx[] = {0, 1, 0, -1};
-    int dy[] = {-1, 0, 1, 0};
-
-    // Use DFS to generate a path from start to exit
+    // Initialize DFS components
     int **visited = (int **)malloc(maze.height * sizeof(int *));
     for (int i = 0; i < maze.height; i++) {
         visited[i] = (int *)malloc(maze.width * sizeof(int));
-        for (int j = 0; j < maze.width; j++) {
-            visited[i][j] = 0;
-        }
+        memset(visited[i], 0, maze.width * sizeof(int));
     }
 
-    // Stack for DFS
+    // DFS stack operations
     int *stack = (int *)malloc(maze.height * maze.width * 2 * sizeof(int));
     int top = -1;
     stack[++top] = maze.player_y;
     stack[++top] = maze.player_x;
     visited[maze.player_y][maze.player_x] = 1;
 
+    // Generate paths using DFS
     while (top >= 0) {
         int current_y = stack[top--];
         int current_x = stack[top--];
 
-        // Shuffle directions to increase randomness
+        // Randomize direction order
         for (int i = 0; i < 4; i++) {
             int j = rand() % 4;
             int temp = dx[i];
@@ -104,145 +93,140 @@ Maze generate_maze(int min_size, int max_size) {
             dy[j] = temp;
         }
 
-        // Check all four directions
+        // Explore directions
         for (int i = 0; i < 4; i++) {
             int new_y = current_y + 2 * dy[i];
             int new_x = current_x + 2 * dx[i];
 
-            if (new_y >= 0 && new_y < maze.height && new_x >= 0 && new_x < maze.width && !visited[new_y][new_x]) {
-                // Carve a path
+            if (new_y >= 0 && new_y < maze.height && 
+                new_x >= 0 && new_x < maze.width && 
+                !visited[new_y][new_x]) {
+                
+                // Create path
                 int mid_y = current_y + dy[i];
                 int mid_x = current_x + dx[i];
                 maze.grid[mid_y][mid_x] = ' ';
                 maze.grid[new_y][new_x] = ' ';
                 visited[new_y][new_x] = 1;
+
+                // Push to stack
                 stack[++top] = new_y;
                 stack[++top] = new_x;
-
-                // Check if we reached the exit
-                if (new_y == maze.exit_y && new_x == maze.exit_x) {
-                    break;
-                }
             }
         }
     }
 
-    // Ensure there is a path from start to exit
-    int current_y = maze.player_y;
-    int current_x = maze.player_x;
-    while (current_y != maze.exit_y || current_x != maze.exit_x) {
-        for (int i = 0; i < 4; i++) {
-            int new_y = current_y + dy[i];
-            int new_x = current_x + dx[i];
-            if (new_y >= 0 && new_y < maze.height && new_x >= 0 && new_x < maze.width) {
-                if (maze.grid[new_y][new_x] == '#') {
-                    maze.grid[new_y][new_x] = ' ';
-                }
-                current_y = new_y;
-                current_x = new_x;
-                break;
-            }
+    // Dynamically set exit position
+    int exit_found = 0;
+    for (int attempt = 0; attempt < 100; attempt++) {
+        int y = rand() % maze.height;
+        int x = rand() % maze.width;
+        if (visited[y][x] && (y != maze.player_y || x != maze.player_x)) {
+            maze.exit_y = y;
+            maze.exit_x = x;
+            exit_found = 1;
+            break;
+        }
+    }
+    if (!exit_found) {  // Fallback position
+        maze.exit_y = maze.height - 2;
+        maze.exit_x = maze.width - 2;
+    }
+    maze.grid[maze.exit_y][maze.exit_x] = 'E';
+
+    // Force connection between start and exit
+    int cy = maze.player_y, cx = maze.player_x;
+    while (cy != maze.exit_y || cx != maze.exit_x) {
+        int dir = rand() % 4;
+        int ny = cy + dy[dir];
+        int nx = cx + dx[dir];
+        if (ny >= 0 && ny < maze.height && nx >= 0 && nx < maze.width) {
+            maze.grid[ny][nx] = ' ';
+            cy = ny;
+            cx = nx;
         }
     }
 
-    // Free dynamically allocated memory
-    for (int i = 0; i < maze.height; i++) {
-        free(visited[i]);
-    }
+    // Ensure start/exit markers are preserved
+    maze.grid[maze.player_y][maze.player_x] = 'S';
+    maze.grid[maze.exit_y][maze.exit_x] = 'E';
+
+    // Cleanup memory
+    for (int i = 0; i < maze.height; i++) free(visited[i]);
     free(visited);
     free(stack);
 
     return maze;
 }
 
-// Print the maze
+// Print maze with player position marked as 'X'
 void print_maze(const Maze *maze) {
     for (int i = 0; i < maze->height; i++) {
         for (int j = 0; j < maze->width; j++) {
-            // Print 'X' for current position
-            if (i == maze->player_y && j == maze->player_x) {
-                printf("X ");
-            } else {
-                printf("%c ", maze->grid[i][j]);
-            }
+            printf("%c ", (i == maze->player_y && j == maze->player_x) ? 'X' : maze->grid[i][j]);
         }
         printf("\n");
     }
 }
 
-// Move player
-int move_player(Maze *maze, char direction) {
-    int new_x = maze->player_x;
-    int new_y = maze->player_y;
-
-    // Update position:
-    switch (direction) {
-        case 'W':
-        case 'w':
-            new_y--;
-            break;
-        case 'A':
-        case 'a':
-            new_x--;
-            break;
-        case 'S':
-        case 's':
-            new_y++;
-            break;
-        case 'D':
-        case 'd':
-            new_x++;
-            break;
-        default:
-            return -1; // Default invalid input
+// Handle player movement
+int move_player(Maze *maze, char dir) {
+    int dx = 0, dy = 0;
+    switch (dir) {
+        case 'W': case 'w': dy = -1; break;
+        case 'S': case 's': dy = 1; break;
+        case 'A': case 'a': dx = -1; break;
+        case 'D': case 'd': dx = 1; break;
+        default: return -1; // Invalid input
     }
+
+    int new_x = maze->player_x + dx;
+    int new_y = maze->player_y + dy;
 
     // Boundary check
     if (new_x < 0 || new_x >= maze->width || new_y < 0 || new_y >= maze->height) {
-        printf("Cannot move off the edge of the map!\n");
+        printf("Cannot move off the edge!\n");
         return -1;
     }
 
-    // Wall check
+    // Wall collision check
     if (maze->grid[new_y][new_x] == '#') {
-        printf("Cannot move through walls!\n");
+        printf("Blocked by wall!\n");
         return -1;
     }
+
+    // Update position
     maze->player_x = new_x;
     maze->player_y = new_y;
 
-    // Check if player reached the exit
-    if (maze->grid[new_y][new_x] == 'E') {
-        return 1; // End - success
-    }
-
-    return 0; 
+    // Check exit condition
+    if (new_x == maze->exit_x && new_y == maze->exit_y) return 1;
+    return 0;
 }
 
-// Main circulation
+// Main game loop
 void game_loop(Maze maze) {
-    char input;
+    char cmd;
     while (1) {
-        printf("Enter a command (W/A/S/D to move, M to show map, Q to quit): ");
-        if (scanf(" %c", &input) != 1) {
-            printf("Error reading input.\n");
-            break;
+        printf("Command (WASD/M/Q): ");
+        if (scanf(" %c", &cmd) != 1) {
+            printf("Input error!\n");
+            while (getchar() != '\n'); // Clear input buffer
+            continue;
         }
 
-        printf("Received input: %c\n", input); // Debug information
-
-        if (input == 'Q' || input == 'q') {
-            printf("Game ended by user.\n");
+        if (cmd == 'Q' || cmd == 'q') {
+            printf("Game quit.\n");
             break;
-        } else if (input == 'M' || input == 'm') {
+        } else if (cmd == 'M' || cmd == 'm') {
             print_maze(&maze);
         } else {
-            int result = move_player(&maze, input);
-            if (result == -1) {
-                printf("Invalid move.\n"); // Debug information
-            } else if (result == 1) {
-                printf("Congratulations! You've reached the exit!\n");
+            int res = move_player(&maze, cmd);
+            if (res == 1) {
+                printf("\n!!! VICTORY !!! You found the exit!\n");
                 break;
+            } else if (res == -1) {
+                printf("Invalid action.\n");
             }
         }
     }
