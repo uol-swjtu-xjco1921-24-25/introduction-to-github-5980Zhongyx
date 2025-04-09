@@ -1,7 +1,6 @@
 #include <stdio.h>
 #include <stdlib.h>
 #include <string.h>
-#include <time.h>
 
 #define MAX_SIZE 100
 #define MIN_SIZE 5
@@ -16,150 +15,119 @@ typedef struct {
     int exit_y;
 } Maze;
 
-Maze generate_maze();
+Maze load_maze(const char *filename);
 void print_maze(const Maze *maze);
 int move_player(Maze *maze, char direction);
 void game_loop(Maze maze);
+void free_maze(Maze *maze);
 
-int main() {
-    srand(time(NULL));
-    Maze maze = generate_maze();
+int main(int argc, char *argv[]) {
+    if (argc != 2) {
+        printf("Usage: %s <maze_file>\n", argv[0]);
+        return 1;
+    }
 
+    Maze maze = load_maze(argv[1]);
     if (maze.grid == NULL) {
-        printf("Failed to generate maze.\n");
+        printf("Failed to load maze.\n");
         return 1;
     }
 
     game_loop(maze);
-
-    // Free allocated memory
-    for (int i = 0; i < maze.height; i++) {
-        free(maze.grid[i]);
-    }
-    free(maze.grid);
-
+    free_maze(&maze);
     return 0;
 }
 
-// Generate maze using DFS algorithm
-Maze generate_maze() {
+Maze load_maze(const char *filename) {
     Maze maze = {0};
-    int dx[] = {0, 1, 0, -1};
-    int dy[] = {-1, 0, 1, 0};
-
-    // Randomize maze dimensions
-    maze.height = MIN_SIZE + rand() % (MAX_SIZE - MIN_SIZE + 1);
-    maze.width = MIN_SIZE + rand() % (MAX_SIZE - MIN_SIZE + 1);
-
-    // Allocate memory for grid
-    maze.grid = (char **)malloc(maze.height * sizeof(char *));
-    for (int i = 0; i < maze.height; i++) {
-        maze.grid[i] = (char *)malloc(maze.width * sizeof(char));
-        memset(maze.grid[i], '#', maze.width); // Initialize with walls
+    FILE *file = fopen(filename, "r");
+    if (!file) {
+        perror("Error opening file");
+        return maze;
     }
 
-    // Set starting position
-    maze.player_x = 1;
-    maze.player_y = 1;
-    maze.grid[maze.player_y][maze.player_x] = 'S';
-
-    // Initialize DFS components
-    int **visited = (int **)malloc(maze.height * sizeof(int *));
-    for (int i = 0; i < maze.height; i++) {
-        visited[i] = (int *)malloc(maze.width * sizeof(int));
-        memset(visited[i], 0, maze.width * sizeof(int));
-    }
-
-    // DFS stack operations
-    int *stack = (int *)malloc(maze.height * maze.width * 2 * sizeof(int));
-    int top = -1;
-    stack[++top] = maze.player_y;
-    stack[++top] = maze.player_x;
-    visited[maze.player_y][maze.player_x] = 1;
-
-    // Generate paths using DFS
-    while (top >= 0) {
-        int current_y = stack[top--];
-        int current_x = stack[top--];
-
-        // Randomize direction order
-        for (int i = 0; i < 4; i++) {
-            int j = rand() % 4;
-            int temp = dx[i];
-            dx[i] = dx[j];
-            dx[j] = temp;
-            temp = dy[i];
-            dy[i] = dy[j];
-            dy[j] = temp;
+    char buffer[MAX_SIZE + 2]; // +2 for newline and null terminator
+    int line_count = 0;
+    int start_found = 0, exit_found = 0;
+    
+    // First pass: validate dimensions and structure
+    while (fgets(buffer, sizeof(buffer), file)) {
+        size_t len = strlen(buffer);
+        if (buffer[len-1] == '\n') len--; // Remove newline
+        
+        if (line_count == 0) {
+            maze.width = len;
+        } else if (len != maze.width) {
+            printf("Invalid maze: Not rectangular\n");
+            fclose(file);
+            return maze;
         }
+        line_count++;
+    }
 
-        // Explore directions
-        for (int i = 0; i < 4; i++) {
-            int new_y = current_y + 2 * dy[i];
-            int new_x = current_x + 2 * dx[i];
+    // Validate dimensions
+    if (line_count < MIN_SIZE || line_count > MAX_SIZE || 
+        maze.width < MIN_SIZE || maze.width > MAX_SIZE) {
+        printf("Invalid maze dimensions\n");
+        fclose(file);
+        return maze;
+    }
+    maze.height = line_count;
 
-            if (new_y >= 0 && new_y < maze.height && 
-                new_x >= 0 && new_x < maze.width && 
-                !visited[new_y][new_x]) {
-                
-                // Create path
-                int mid_y = current_y + dy[i];
-                int mid_x = current_x + dx[i];
-                maze.grid[mid_y][mid_x] = ' ';
-                maze.grid[new_y][new_x] = ' ';
-                visited[new_y][new_x] = 1;
+    // Allocate memory
+    maze.grid = malloc(maze.height * sizeof(char *));
+    for (int i = 0; i < maze.height; i++) {
+        maze.grid[i] = malloc(maze.width * sizeof(char));
+    }
 
-                // Push to stack
-                stack[++top] = new_y;
-                stack[++top] = new_x;
+    // Second pass: load content
+    rewind(file);
+    for (int y = 0; y < maze.height; y++) {
+        fgets(buffer, sizeof(buffer), file);
+        for (int x = 0; x < maze.width; x++) {
+            char c = buffer[x];
+            maze.grid[y][x] = c;
+
+            if (c == 'S') {
+                if (start_found++) {
+                    printf("Multiple start positions\n");
+                    free_maze(&maze);
+                    fclose(file);
+                    return (Maze){0};
+                }
+                maze.player_x = x;
+                maze.player_y = y;
+            } else if (c == 'E') {
+                if (exit_found++) {
+                    printf("Multiple exit positions\n");
+                    free_maze(&maze);
+                    fclose(file);
+                    return (Maze){0};
+                }
+                maze.exit_x = x;
+                maze.exit_y = y;
             }
         }
     }
+    fclose(file);
 
-    // Dynamically set exit position
-    int exit_found = 0;
-    for (int attempt = 0; attempt < 100; attempt++) {
-        int y = rand() % maze.height;
-        int x = rand() % maze.width;
-        if (visited[y][x] && (y != maze.player_y || x != maze.player_x)) {
-            maze.exit_y = y;
-            maze.exit_x = x;
-            exit_found = 1;
-            break;
-        }
+    if (!start_found || !exit_found) {
+        printf("Missing start/exit position\n");
+        free_maze(&maze);
+        return (Maze){0};
     }
-    if (!exit_found) {  // Fallback position
-        maze.exit_y = maze.height - 2;
-        maze.exit_x = maze.width - 2;
-    }
-    maze.grid[maze.exit_y][maze.exit_x] = 'E';
-
-    // Force connection between start and exit
-    int cy = maze.player_y, cx = maze.player_x;
-    while (cy != maze.exit_y || cx != maze.exit_x) {
-        int dir = rand() % 4;
-        int ny = cy + dy[dir];
-        int nx = cx + dx[dir];
-        if (ny >= 0 && ny < maze.height && nx >= 0 && nx < maze.width) {
-            maze.grid[ny][nx] = ' ';
-            cy = ny;
-            cx = nx;
-        }
-    }
-
-    // Ensure start/exit markers are preserved
-    maze.grid[maze.player_y][maze.player_x] = 'S';
-    maze.grid[maze.exit_y][maze.exit_x] = 'E';
-
-    // Cleanup memory
-    for (int i = 0; i < maze.height; i++) free(visited[i]);
-    free(visited);
-    free(stack);
 
     return maze;
 }
 
-// Print maze with player position marked as 'X'
+void free_maze(Maze *maze) {
+    for (int i = 0; i < maze->height; i++) {
+        free(maze->grid[i]);
+    }
+    free(maze->grid);
+    maze->grid = NULL;
+}
+
 void print_maze(const Maze *maze) {
     for (int i = 0; i < maze->height; i++) {
         for (int j = 0; j < maze->width; j++) {
@@ -204,9 +172,11 @@ int move_player(Maze *maze, char dir) {
     return 0;
 }
 
-// Main game loop
+// Main game loop with input buffer management
 void game_loop(Maze maze) {
     char cmd;
+    char buffer[100]; // Input buffer
+
     while (1) {
         printf("Command (WASD/M/Q): ");
         if (scanf(" %c", &cmd) != 1) {
@@ -214,6 +184,9 @@ void game_loop(Maze maze) {
             while (getchar() != '\n'); // Clear input buffer
             continue;
         }
+
+        // Clear remaining characters in buffer
+        fgets(buffer, sizeof(buffer), stdin);
 
         if (cmd == 'Q' || cmd == 'q') {
             printf("Game quit.\n");
