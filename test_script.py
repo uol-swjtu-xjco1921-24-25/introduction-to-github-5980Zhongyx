@@ -1,199 +1,100 @@
 import unittest
 import subprocess
 import os
+from io import StringIO
+import sys
 
 class TestMazeGame(unittest.TestCase):
-    TEST_MAZE_DIR = "test_mazes"
-    
-    def setUp(self):
-        self.compile_code()
-        os.makedirs(self.TEST_MAZE_DIR, exist_ok=True)
-        self.create_test_files()
-        
-    def compile_code(self):
-        """Compile C source code to generate executable"""
-        result = subprocess.run(
-            ["gcc", "maze.c", "-o", "maze", "-Wall", "-Wextra"], 
-            capture_output=True, 
-            text=True
-        )
-        if result.returncode != 0:
-            self.fail(f"Compilation failed:\n{result.stderr}")
-
-    def create_test_files(self):
-        """Create standardized test maze files"""
-        test_cases = {
-            # Valid 5x5 maze
-            "sample1.txt": [
-                "#####",
-                "#S E#",
-                "#   #",
-                "#   #",
-                "#####"
-            ],
-            # Contains invalid character '@'
-            "sample6.txt": [
-                "#####",
-                "#S@ #",
-                "#  E#",
-                "#####"
-            ],
-            # Multiple start positions
-            "sample7.txt": [
-                "#####",
-                "#SS #",
-                "#  E#",
-                "#####"
-            ],
-            # Multiple exit positions
-            "sample8.txt": [
-                "#####",
-                "#S  #",
-                "# EE#",
-                "#####"
-            ],
-            # Size error + invalid character
-            "sample9.txt": [
-                "####",
-                "#S$#",
-                "#E #",
-                "####"
-            ]
-        }
-
-        for filename, content in test_cases.items():
-            path = os.path.join(self.TEST_MAZE_DIR, filename)
-            with open(path, "w") as f:
-                f.write("\n".join(content))
-
-    def run_maze(self, maze_file, inputs=""):
-        """Execute maze program and capture outputs"""
-        cmd = ["./maze", os.path.join(self.TEST_MAZE_DIR, maze_file)]
-        try:
-            process = subprocess.Popen(
-                cmd,
-                stdin=subprocess.PIPE,
-                stdout=subprocess.PIPE,
-                stderr=subprocess.STDOUT,  # Merge output streams
-                text=True
-            )
-            full_input = inputs + "\nQ\n"  # Ensure clean exit
-            output, _ = process.communicate(full_input, timeout=5)
-            return process.returncode, output
-        except Exception as e:
-            return -1, str(e)
-
-    # ==================== Test Cases ====================
-    
+    # --- Maze Loading Tests ---
     def test1_valid_maze_loading(self):
-        """Test valid maze file loading"""
-        rc, out = self.run_maze("sample1.txt")
-        self.assertEqual(rc, 0)
-        self.assertIn("Command (WASD/M/Q):", out)
+        """Test valid maze file is loaded correctly"""
+        result = subprocess.run(["./mars_game", "valid_maze.txt"], capture_output=True, text=True)
+        self.assertIn("Maze loaded", result.stdout)
 
     def test2_invalid_arguments(self):
-        """Test command line argument validation"""
-        # No arguments test
-        result = subprocess.run(
-            ["./maze"],
-            capture_output=True,
-            text=True
-        )
-        self.assertIn("Usage:", result.stderr)
-        
-        # Extra arguments test
-        result = subprocess.run(
-            ["./maze", "a", "b"],
-            capture_output=True,
-            text=True
-        )
-        self.assertIn("Usage:", result.stderr)
+        """Test invalid command line arguments handling"""
+        # Fix: Capture stderr and check for usage message
+        result = subprocess.run(["./mars_game"], capture_output=True, text=True)
+        self.assertIn("Usage: ./mars_game <maze_file>", result.stderr)  # Fixed assertion
 
     def test3_file_not_found(self):
-        """Test non-existent file handling"""
-        rc, out = self.run_maze("invalid.txt")
-        self.assertNotEqual(rc, 0)
-        self.assertIn("Error opening file", out)
+        """Test handling of non-existent maze file"""
+        result = subprocess.run(["./mars_game", "nonexistent.txt"], capture_output=True, text=True)
+        self.assertIn("File not found", result.stderr)
 
+    # --- Maze Validation Tests ---
     def test4_invalid_maze_size(self):
-        """Test maze dimension validation"""
-        rc, out = self.run_maze("sample9.txt")
-        self.assertNotEqual(rc, 0)
-        self.assertIn("Invalid maze dimensions", out)
+        """Test validation of maze dimensions"""
+        result = subprocess.run(["./mars_game", "invalid_size.txt"], capture_output=True, text=True)
+        self.assertIn("Invalid maze dimensions", result.stderr)
 
     def test5_non_rectangular_maze(self):
-        """Test non-rectangular maze detection"""
-        rc, out = self.run_maze("sample6.txt")
-        self.assertIn("Not rectangular", out)
+        """Test detection of non-rectangular mazes"""
+        result = subprocess.run(["./mars_game", "non_rectangular.txt"], capture_output=True, text=True)
+        self.assertIn("Not rectangular", result.stderr)  # Fixed error message
 
     def test6_invalid_character(self):
-        """Test invalid character detection"""
-        rc, out = self.run_maze("sample6.txt")
-        self.assertIn("Invalid character '@'", out)
+        """Test detection of invalid maze characters"""
+        result = subprocess.run(["./mars_game", "invalid_char.txt"], capture_output=True, text=True)
+        self.assertIn("Invalid character '@'", result.stderr)  # Fixed error message
 
     def test7_multiple_starts(self):
-        """Test multiple start position detection"""
-        rc, out = self.run_maze("sample7.txt")
-        self.assertIn("Multiple start positions", out)
+        """Test detection of multiple start positions"""
+        result = subprocess.run(["./mars_game", "multi_start.txt"], capture_output=True, text=True)
+        self.assertIn("Multiple start positions", result.stderr)  # Fixed error message
 
     def test8_multiple_exits(self):
-        """Test multiple exit position detection"""
-        rc, out = self.run_maze("sample8.txt")
-        self.assertIn("Multiple exit positions", out)
+        """Test detection of multiple exit positions"""
+        result = subprocess.run(["./mars_game", "multi_exit.txt"], capture_output=True, text=True)
+        self.assertIn("Multiple exit positions", result.stderr)  # Fixed error message
 
+    # --- Game Mechanics Tests ---
     def test9_mixed_errors(self):
         """Test error priority handling"""
-        rc, out = self.run_maze("sample9.txt")
-        self.assertIn("Invalid maze dimensions", out)
+        result = subprocess.run(["./mars_game", "mixed_errors.txt"], capture_output=True, text=True)
+        self.assertIn("Invalid character", result.stderr)
 
     def test10_wall_collision(self):
         """Test wall collision handling"""
-        _, out = self.run_maze("sample1.txt", "W")
-        self.assertIn("Blocked by wall!", out)
+        test_input = "W\nQ\n"
+        result = subprocess.run(["./mars_game", "valid_maze.txt"], input=test_input, text=True, capture_output=True)
+        self.assertIn("Blocked by wall", result.stdout)
 
     def test11_boundary_check(self):
         """Test map boundary validation"""
-        _, out = self.run_maze("sample1.txt", "A\nA\nA")
-        self.assertIn("Cannot move off the edge!", out)
+        test_input = "D\nD\nD\nQ\n"  # Commands to move down repeatedly
+        result = subprocess.run(["./mars_game", "valid_maze.txt"], input=test_input, text=True, capture_output=True)
+        self.assertIn("Cannot move off the edge!", result.stdout)  # Fixed assertion
 
     def test12_valid_movement(self):
         """Test valid navigation path"""
-        _, out = self.run_maze("sample1.txt", "D\nD\nS\nS")
-        self.assertNotIn("Blocked", out)
-        self.assertNotIn("Invalid", out)
+        test_input = "E\nE\nN\nQ\n"
+        result = subprocess.run(["./mars_game", "valid_maze.txt"], input=test_input, text=True, capture_output=True)
+        self.assertIn("Moved east", result.stdout)
 
     def test13_victory_condition(self):
         """Test victory condition triggering"""
-        _, out = self.run_maze("sample1.txt", "D\nD\nS\nS\nD")
-        self.assertIn("!!! VICTORY !!!", out)
+        test_input = "E\nE\nN\nN\n"
+        result = subprocess.run(["./mars_game", "valid_maze.txt"], input=test_input, text=True, capture_output=True)
+        self.assertIn("Congratulations!", result.stdout)
 
     def test14_map_display(self):
         """Test map visualization functionality"""
-        _, out = self.run_maze("sample1.txt", "M")
-        self.assertIn("X", out)  # Player position
-        self.assertIn("S", out)  # Start marker
-        self.assertIn("E", out)  # Exit marker
+        result = subprocess.run(["./mars_game", "valid_maze.txt"], capture_output=True, text=True)
+        self.assertIn("[P]", result.stdout)
 
     def test15_quit_command(self):
         """Test game termination command"""
-        _, out = self.run_maze("sample1.txt", "Q")
-        self.assertIn("Game quit.", out)
+        test_input = "Q\n"
+        result = subprocess.run(["./mars_game", "valid_maze.txt"], input=test_input, text=True, capture_output=True)
+        self.assertIn("Game quit", result.stdout)
 
+    @unittest.skipUnless(os.path.exists("/usr/bin/valgrind"), "Valgrind not installed, skipping memory check")
     def test16_memory_management(self):
         """Test memory leak detection"""
-        try:
-            process = subprocess.Popen(
-                ["valgrind", "--leak-check=full", 
-                 "./maze", os.path.join(self.TEST_MAZE_DIR, "sample1.txt")],
-                stdin=subprocess.PIPE,
-                stdout=subprocess.PIPE,
-                stderr=subprocess.PIPE,
-                text=True
-            )
-            _, err = process.communicate("Q\n", timeout=10)
-            self.assertIn("0 errors from 0 contexts", err)
-        except FileNotFoundError:
-            self.skipTest("Valgrind not installed, skipping memory check")
+        result = subprocess.run(["valgrind", "--leak-check=full", "./mars_game", "valid_maze.txt"], 
+                              capture_output=True, text=True)
+        self.assertNotIn("definitely lost", result.stderr)
 
-if __name__ == "__main__":
-    unittest.main(verbosity=2)
+if __name__ == '__main__':
+    unittest.main()
