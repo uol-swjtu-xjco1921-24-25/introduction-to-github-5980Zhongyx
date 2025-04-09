@@ -1,14 +1,6 @@
 import unittest
 import subprocess
 import os
-import re
-
-class TestMazeGame(unittest.TestCase):
-    TEST_MAZE_DIR = "test_mazes"
-    
-import unittest
-import subprocess
-import os
 
 class TestMazeGame(unittest.TestCase):
     TEST_MAZE_DIR = "test_mazes"
