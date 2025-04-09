@@ -6,8 +6,8 @@
 #define MIN_SIZE 5
 
 typedef struct {
-    int height;
-    int width;
+    size_t height;
+    size_t width;
     char **grid;
     int player_x;
     int player_y;
@@ -46,13 +46,13 @@ Maze load_maze(const char *filename) {
     }
 
     char buffer[MAX_SIZE + 2];
-    int line_count = 0;
+    size_t line_count = 0;
     int start_found = 0, exit_found = 0;
     
     // First pass: validate dimensions and structure
     while (fgets(buffer, sizeof(buffer), file)) {
         size_t len = strlen(buffer);
-        if (buffer[len-1] == '\n') len--;
+        if (len > 0 && buffer[len-1] == '\n') len--;
         
         if (line_count == 0) {
             maze.width = len;
@@ -64,9 +64,11 @@ Maze load_maze(const char *filename) {
         line_count++;
     }
 
-    // Validate dimensions
-    if (line_count < MIN_SIZE || line_count > MAX_SIZE || 
-        maze.width < MIN_SIZE || maze.width > MAX_SIZE) {
+    // Validate dimensions with explicit type casting
+    const size_t min_size = (size_t)MIN_SIZE;
+    const size_t max_size = (size_t)MAX_SIZE;
+    if (line_count < min_size || line_count > max_size || 
+        maze.width < min_size || maze.width > max_size) {
         printf("Invalid maze dimensions\n");
         fclose(file);
         return maze;
@@ -75,20 +77,20 @@ Maze load_maze(const char *filename) {
 
     // Allocate memory
     maze.grid = malloc(maze.height * sizeof(char *));
-    for (int i = 0; i < maze.height; i++) {
+    for (size_t i = 0; i < maze.height; i++) {
         maze.grid[i] = malloc(maze.width * sizeof(char));
     }
 
     // Second pass: load content
     rewind(file);
-    for (int y = 0; y < maze.height; y++) {
-        fgets(buffer, sizeof(buffer), file);
-        for (int x = 0; x < maze.width; x++) {
+    for (size_t y = 0; y < maze.height; y++) {
+        if (fgets(buffer, sizeof(buffer), file) == NULL) break;
+        for (size_t x = 0; x < maze.width; x++) {
             char c = buffer[x];
             
             // Validate characters
             if (!(c == '#' || c == ' ' || c == 'S' || c == 'E')) {
-                printf("Invalid character '%c' at (%d,%d)\n", c, y, x);
+                printf("Invalid character '%c' at (%zu,%zu)\n", c, y, x);
                 free_maze(&maze);
                 fclose(file);
                 return (Maze){0};
@@ -103,8 +105,8 @@ Maze load_maze(const char *filename) {
                     fclose(file);
                     return (Maze){0};
                 }
-                maze.player_x = x;
-                maze.player_y = y;
+                maze.player_x = (int)x;
+                maze.player_y = (int)y;
             } else if (c == 'E') {
                 if (exit_found++) {
                     printf("Multiple exit positions\n");
@@ -112,8 +114,8 @@ Maze load_maze(const char *filename) {
                     fclose(file);
                     return (Maze){0};
                 }
-                maze.exit_x = x;
-                maze.exit_y = y;
+                maze.exit_x = (int)x;
+                maze.exit_y = (int)y;
             }
         }
     }
@@ -130,7 +132,7 @@ Maze load_maze(const char *filename) {
 
 void free_maze(Maze *maze) {
     if (maze->grid) {
-        for (int i = 0; i < maze->height; i++) {
+        for (size_t i = 0; i < maze->height; i++) {
             free(maze->grid[i]);
         }
         free(maze->grid);
@@ -139,9 +141,9 @@ void free_maze(Maze *maze) {
 }
 
 void print_maze(const Maze *maze) {
-    for (int i = 0; i < maze->height; i++) {
-        for (int j = 0; j < maze->width; j++) {
-            printf("%c ", (i == maze->player_y && j == maze->player_x) ? 'X' : maze->grid[i][j]);
+    for (size_t i = 0; i < maze->height; i++) {
+        for (size_t j = 0; j < maze->width; j++) {
+            printf("%c ", (i == (size_t)maze->player_y && j == (size_t)maze->player_x) ? 'X' : maze->grid[i][j]);
         }
         printf("\n");
     }
@@ -160,7 +162,8 @@ int move_player(Maze *maze, char dir) {
     int new_x = maze->player_x + dx;
     int new_y = maze->player_y + dy;
 
-    if (new_x < 0 || new_x >= maze->width || new_y < 0 || new_y >= maze->height) {
+    if (new_x < 0 || (size_t)new_x >= maze->width || 
+        new_y < 0 || (size_t)new_y >= maze->height) {
         printf("Cannot move off the edge!\n");
         return -1;
     }
