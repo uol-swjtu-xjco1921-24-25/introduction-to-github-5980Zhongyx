@@ -29,7 +29,6 @@ int main(int argc, char *argv[]) {
 
     Maze maze = load_maze(argv[1]);
     if (maze.grid == NULL) {
-        printf("Failed to load maze.\n");
         return 1;
     }
 
@@ -46,14 +45,14 @@ Maze load_maze(const char *filename) {
         return maze;
     }
 
-    char buffer[MAX_SIZE + 2]; // +2 for newline and null terminator
+    char buffer[MAX_SIZE + 2];
     int line_count = 0;
     int start_found = 0, exit_found = 0;
     
     // First pass: validate dimensions and structure
     while (fgets(buffer, sizeof(buffer), file)) {
         size_t len = strlen(buffer);
-        if (buffer[len-1] == '\n') len--; // Remove newline
+        if (buffer[len-1] == '\n') len--;
         
         if (line_count == 0) {
             maze.width = len;
@@ -86,6 +85,15 @@ Maze load_maze(const char *filename) {
         fgets(buffer, sizeof(buffer), file);
         for (int x = 0; x < maze.width; x++) {
             char c = buffer[x];
+            
+            // Validate characters
+            if (!(c == '#' || c == ' ' || c == 'S' || c == 'E')) {
+                printf("Invalid character '%c' at (%d,%d)\n", c, y, x);
+                free_maze(&maze);
+                fclose(file);
+                return (Maze){0};
+            }
+
             maze.grid[y][x] = c;
 
             if (c == 'S') {
@@ -121,11 +129,13 @@ Maze load_maze(const char *filename) {
 }
 
 void free_maze(Maze *maze) {
-    for (int i = 0; i < maze->height; i++) {
-        free(maze->grid[i]);
+    if (maze->grid) {
+        for (int i = 0; i < maze->height; i++) {
+            free(maze->grid[i]);
+        }
+        free(maze->grid);
+        maze->grid = NULL;
     }
-    free(maze->grid);
-    maze->grid = NULL;
 }
 
 void print_maze(const Maze *maze) {
@@ -137,7 +147,6 @@ void print_maze(const Maze *maze) {
     }
 }
 
-// Handle player movement
 int move_player(Maze *maze, char dir) {
     int dx = 0, dy = 0;
     switch (dir) {
@@ -145,47 +154,41 @@ int move_player(Maze *maze, char dir) {
         case 'S': case 's': dy = 1; break;
         case 'A': case 'a': dx = -1; break;
         case 'D': case 'd': dx = 1; break;
-        default: return -1; // Invalid input
+        default: return -1;
     }
 
     int new_x = maze->player_x + dx;
     int new_y = maze->player_y + dy;
 
-    // Boundary check
     if (new_x < 0 || new_x >= maze->width || new_y < 0 || new_y >= maze->height) {
         printf("Cannot move off the edge!\n");
         return -1;
     }
 
-    // Wall collision check
     if (maze->grid[new_y][new_x] == '#') {
         printf("Blocked by wall!\n");
         return -1;
     }
 
-    // Update position
     maze->player_x = new_x;
     maze->player_y = new_y;
 
-    // Check exit condition
     if (new_x == maze->exit_x && new_y == maze->exit_y) return 1;
     return 0;
 }
 
-// Main game loop with input buffer management
 void game_loop(Maze maze) {
     char cmd;
-    char buffer[100]; // Input buffer
+    char buffer[100];
 
     while (1) {
         printf("Command (WASD/M/Q): ");
         if (scanf(" %c", &cmd) != 1) {
             printf("Input error!\n");
-            while (getchar() != '\n'); // Clear input buffer
+            while (getchar() != '\n');
             continue;
         }
 
-        // Clear remaining characters in buffer
         fgets(buffer, sizeof(buffer), stdin);
 
         if (cmd == 'Q' || cmd == 'q') {
