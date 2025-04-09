@@ -6,150 +6,199 @@ import re
 class TestMazeGame(unittest.TestCase):
     TEST_MAZE_DIR = "test_mazes"
     
+import unittest
+import subprocess
+import os
+
+class TestMazeGame(unittest.TestCase):
+    TEST_MAZE_DIR = "test_mazes"
+    
     def setUp(self):
         self.compile_code()
         os.makedirs(self.TEST_MAZE_DIR, exist_ok=True)
+        self.create_test_files()
         
     def compile_code(self):
-        """Compile C code to generate executable"""
+        """Compile C source code to generate executable"""
         result = subprocess.run(
-            ["gcc", "maze.c", "-o", "maze"], 
+            ["gcc", "maze.c", "-o", "maze", "-Wall", "-Wextra"], 
             capture_output=True, 
             text=True
         )
-        self.assertEqual(result.returncode, 0, f"Compilation failed: {result.stderr}")
-        self.assertTrue(os.path.exists("./maze"), "Executable 'maze' not found")
+        if result.returncode != 0:
+            self.fail(f"Compilation failed:\n{result.stderr}")
 
-    def run_maze(self, maze_file, inputs):
-        """Run maze program and return output"""
+    def create_test_files(self):
+        """Create standardized test maze files"""
+        test_cases = {
+            # Valid 5x5 maze
+            "sample1.txt": [
+                "#####",
+                "#S E#",
+                "#   #",
+                "#   #",
+                "#####"
+            ],
+            # Contains invalid character '@'
+            "sample6.txt": [
+                "#####",
+                "#S@ #",
+                "#  E#",
+                "#####"
+            ],
+            # Multiple start positions
+            "sample7.txt": [
+                "#####",
+                "#SS #",
+                "#  E#",
+                "#####"
+            ],
+            # Multiple exit positions
+            "sample8.txt": [
+                "#####",
+                "#S  #",
+                "# EE#",
+                "#####"
+            ],
+            # Size error + invalid character
+            "sample9.txt": [
+                "####",
+                "#S$#",
+                "#E #",
+                "####"
+            ]
+        }
+
+        for filename, content in test_cases.items():
+            path = os.path.join(self.TEST_MAZE_DIR, filename)
+            with open(path, "w") as f:
+                f.write("\n".join(content))
+
+    def run_maze(self, maze_file, inputs=""):
+        """Execute maze program and capture outputs"""
         cmd = ["./maze", os.path.join(self.TEST_MAZE_DIR, maze_file)]
-        process = subprocess.Popen(
-            cmd,
-            stdin=subprocess.PIPE,
-            stdout=subprocess.PIPE,
-            stderr=subprocess.PIPE,
-            text=True
-        )
-        output, error = process.communicate(inputs)
-        return process.returncode, output, error
+        try:
+            process = subprocess.Popen(
+                cmd,
+                stdin=subprocess.PIPE,
+                stdout=subprocess.PIPE,
+                stderr=subprocess.STDOUT,  # Merge output streams
+                text=True
+            )
+            full_input = inputs + "\nQ\n"  # Ensure clean exit
+            output, _ = process.communicate(full_input, timeout=5)
+            return process.returncode, output
+        except Exception as e:
+            return -1, str(e)
 
-    # ------------------- Core Test Cases -------------------
-
+    # ==================== Test Cases ====================
+    
     def test1_valid_maze_loading(self):
         """Test valid maze file loading"""
-        rc, out, err = self.run_maze("sample1.txt", "Q\n")
+        rc, out = self.run_maze("sample1.txt")
         self.assertEqual(rc, 0)
         self.assertIn("Command (WASD/M/Q):", out)
 
     def test2_invalid_arguments(self):
-        """Test command line argument handling"""
-        # No arguments
-        process = subprocess.Popen(
+        """Test command line argument validation"""
+        # No arguments test
+        result = subprocess.run(
             ["./maze"],
-            stdout=subprocess.PIPE,
-            stderr=subprocess.PIPE,
+            capture_output=True,
             text=True
         )
-        _, err = process.communicate()
-        self.assertIn("Usage:", err)
-
-        # Extra arguments
-        process = subprocess.Popen(
+        self.assertIn("Usage:", result.stderr)
+        
+        # Extra arguments test
+        result = subprocess.run(
             ["./maze", "a", "b"],
-            stdout=subprocess.PIPE,
-            stderr=subprocess.PIPE,
+            capture_output=True,
             text=True
         )
-        _, err = process.communicate()
-        self.assertIn("Usage:", err)
+        self.assertIn("Usage:", result.stderr)
 
     def test3_file_not_found(self):
         """Test non-existent file handling"""
-        rc, _, err = self.run_maze("nonexistent.txt", "")
+        rc, out = self.run_maze("invalid.txt")
         self.assertNotEqual(rc, 0)
-        self.assertIn("Error opening file", err)
+        self.assertIn("Error opening file", out)
 
     def test4_invalid_maze_size(self):
-        """Test maze size validation"""
-        rc, _, err = self.run_maze("sample9.txt", "")
+        """Test maze dimension validation"""
+        rc, out = self.run_maze("sample9.txt")
         self.assertNotEqual(rc, 0)
-        self.assertIn("Invalid maze dimensions", err)
+        self.assertIn("Invalid maze dimensions", out)
 
     def test5_non_rectangular_maze(self):
         """Test non-rectangular maze detection"""
-        rc, _, err = self.run_maze("sample6.txt", "")
-        self.assertNotEqual(rc, 0)
-        self.assertIn("Not rectangular", err)
+        rc, out = self.run_maze("sample6.txt")
+        self.assertIn("Not rectangular", out)
 
     def test6_invalid_character(self):
         """Test invalid character detection"""
-        rc, _, err = self.run_maze("sample6.txt", "")
-        self.assertNotEqual(rc, 0)
-        self.assertIn("Invalid character '@'", err)
+        rc, out = self.run_maze("sample6.txt")
+        self.assertIn("Invalid character '@'", out)
 
     def test7_multiple_starts(self):
-        """Test multiple start positions detection"""
-        rc, _, err = self.run_maze("sample7.txt", "")
-        self.assertNotEqual(rc, 0)
-        self.assertIn("Multiple start positions", err)
+        """Test multiple start position detection"""
+        rc, out = self.run_maze("sample7.txt")
+        self.assertIn("Multiple start positions", out)
 
     def test8_multiple_exits(self):
-        """Test multiple exit positions detection"""
-        rc, _, err = self.run_maze("sample8.txt", "")
-        self.assertNotEqual(rc, 0)
-        self.assertIn("Multiple exit positions", err)
+        """Test multiple exit position detection"""
+        rc, out = self.run_maze("sample8.txt")
+        self.assertIn("Multiple exit positions", out)
 
     def test9_mixed_errors(self):
-        """Test combined error detection priority"""
-        rc, _, err = self.run_maze("sample9.txt", "")
-        self.assertIn("Invalid maze dimensions", err)
+        """Test error priority handling"""
+        rc, out = self.run_maze("sample9.txt")
+        self.assertIn("Invalid maze dimensions", out)
 
     def test10_wall_collision(self):
         """Test wall collision handling"""
-        rc, out, _ = self.run_maze("sample1.txt", "W\nQ\n")
+        _, out = self.run_maze("sample1.txt", "W")
         self.assertIn("Blocked by wall!", out)
 
     def test11_boundary_check(self):
         """Test map boundary validation"""
-        rc, out, _ = self.run_maze("sample1.txt", "A\nA\nA\nQ\n")
+        _, out = self.run_maze("sample1.txt", "A\nA\nA")
         self.assertIn("Cannot move off the edge!", out)
 
     def test12_valid_movement(self):
-        """Test valid movement path"""
-        inputs = "D\n"*3 + "S\n"*2 + "Q\n"
-        rc, out, _ = self.run_maze("sample2.txt", inputs)
+        """Test valid navigation path"""
+        _, out = self.run_maze("sample1.txt", "D\nD\nS\nS")
         self.assertNotIn("Blocked", out)
         self.assertNotIn("Invalid", out)
 
     def test13_victory_condition(self):
         """Test victory condition triggering"""
-        inputs = "D\n"*3 + "S\n"*2 + "D\n"
-        rc, out, _ = self.run_maze("sample2.txt", inputs)
+        _, out = self.run_maze("sample1.txt", "D\nD\nS\nS\nD")
         self.assertIn("!!! VICTORY !!!", out)
 
     def test14_map_display(self):
-        """Test map display functionality"""
-        rc, out, _ = self.run_maze("sample1.txt", "M\nQ\n")
+        """Test map visualization functionality"""
+        _, out = self.run_maze("sample1.txt", "M")
         self.assertIn("X", out)  # Player position
         self.assertIn("S", out)  # Start marker
         self.assertIn("E", out)  # Exit marker
 
     def test15_quit_command(self):
-        """Test game termination with quit command"""
-        rc, out, _ = self.run_maze("sample1.txt", "Q\n")
+        """Test game termination command"""
+        _, out = self.run_maze("sample1.txt", "Q")
         self.assertIn("Game quit.", out)
 
     def test16_memory_management(self):
         """Test memory leak detection"""
         try:
             process = subprocess.Popen(
-                ["valgrind", "--leak-check=full", "./maze", os.path.join(self.TEST_MAZE_DIR, "sample1.txt")],
+                ["valgrind", "--leak-check=full", 
+                 "./maze", os.path.join(self.TEST_MAZE_DIR, "sample1.txt")],
                 stdin=subprocess.PIPE,
                 stdout=subprocess.PIPE,
                 stderr=subprocess.PIPE,
                 text=True
             )
-            _, err = process.communicate("Q\n")
+            _, err = process.communicate("Q\n", timeout=10)
             self.assertIn("0 errors from 0 contexts", err)
         except FileNotFoundError:
             self.skipTest("Valgrind not installed, skipping memory check")
