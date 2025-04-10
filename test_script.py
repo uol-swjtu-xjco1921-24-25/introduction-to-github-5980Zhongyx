@@ -103,7 +103,6 @@ class TestMazeGame(unittest.TestCase):
             capture_output=True,
             text=True
         )
-        # Check stdout (C代码错误输出到stdout)
         self.assertIn("Usage:", result.stdout)
         
         # Extra arguments test
@@ -121,16 +120,14 @@ class TestMazeGame(unittest.TestCase):
         self.assertIn("Error opening file", out)
 
     def test4_invalid_maze_size(self):
-        """Test maze dimension validation"""
-        # 使用一个尺寸不足的迷宫文件（例如4x4）
-        rc, out = self.run_maze("sample9.txt")
+        """test maze size"""
+        rc, out = self.run_maze("sample4_invalid_size.txt")
         self.assertNotEqual(rc, 0)
         self.assertIn("Invalid maze dimensions", out)
 
     def test5_non_rectangular_maze(self):
-        """Test non-rectangular maze detection"""
-        # 使用一个非矩形的合法尺寸迷宫（例如5x5但某行少一个字符）
-        rc, out = self.run_maze("sample6.txt")
+        """test non-rectangular maze"""
+        rc, out = self.run_maze("sample5_non_rect.txt")
         self.assertIn("Invalid maze: Not rectangular", out)
 
     def test6_invalid_character(self):
@@ -159,9 +156,8 @@ class TestMazeGame(unittest.TestCase):
         self.assertIn("Blocked by wall!", out)
 
     def test11_boundary_check(self):
-        """Test map boundary validation"""
-        # 确保初始位置在边缘（例如sample1中S在(1,1)，输入"A"会越界
-        _, out = self.run_maze("sample1.txt", "A")
+        """test map boundary"""
+        _, out = self.run_maze("sample1_edge.txt", "A")
         self.assertIn("Cannot move off the edge!", out)
 
     def test12_valid_movement(self):
@@ -205,3 +201,4 @@ class TestMazeGame(unittest.TestCase):
 
 if __name__ == "__main__":
     unittest.main(verbosity=2)
+
