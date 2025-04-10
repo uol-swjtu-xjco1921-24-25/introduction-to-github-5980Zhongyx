@@ -2,16 +2,21 @@ import unittest
 import subprocess
 import os
 
+#main test class 
 class TestMazeGame(unittest.TestCase):
     TEST_MAZE_DIR = "test_mazes"
-    
+    #maze files folder to store test maze files
     def setUp(self):
+        # Run before every test
         self.compile_code()
+        #to make sure code compiled
         os.makedirs(self.TEST_MAZE_DIR, exist_ok=True)
+
         self.create_test_files()
         
     def compile_code(self):
         """Compile C source code to generate executable"""
+        #tey to compile the C program
         result = subprocess.run(
             ["gcc", "maze.c", "-o", "maze", "-Wall", "-Wextra"], 
             capture_output=True, 
@@ -19,6 +24,8 @@ class TestMazeGame(unittest.TestCase):
         )
         if result.returncode != 0:
             self.fail(f"Compilation failed:\n{result.stderr}")
+            #If compile fails: CRASH!
+#helper to create maze test files
 
     def create_test_files(self):
         """Create standardized test maze files"""
@@ -64,7 +71,7 @@ class TestMazeGame(unittest.TestCase):
                 "#####"
             ]
         }
-
+#write each maze to a file
         for filename, content in test_cases.items():
             path = os.path.join(self.TEST_MAZE_DIR, filename)
             with open(path, "w") as f:
@@ -174,9 +181,9 @@ class TestMazeGame(unittest.TestCase):
     def test14_map_display(self):
         """Test map visualization functionality"""
         _, out = self.run_maze("sample1.txt", "M")
-        self.assertIn("X", out)  # Player position
-        self.assertIn("S", out)  # Start marker
-        self.assertIn("E", out)  # Exit marker
+        self.assertIn("X", out)  # player position show by "X"
+        self.assertIn("S", out)  # "S": start marker
+        self.assertIn("E", out)  # "E" : Exit marker "VICTORY！"
 
     def test15_quit_command(self):
         """Test game termination command"""
@@ -201,4 +208,3 @@ class TestMazeGame(unittest.TestCase):
 
 if __name__ == "__main__":
     unittest.main(verbosity=2)
-
